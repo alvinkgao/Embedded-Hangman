@@ -13,33 +13,15 @@
 #include "avr.h"
 #include "lcd.h"
 #include "keypad.h"
+#include "random_word.h"
 
 int end_game = 0;
-int guesses = 6;
+int lives = 6;
 char inp_str[17] = "";
 char out_str[17] = "";
 char cur_guess = ' ';
 const char* letter_guesses = "";
-const char* word;
 
-const char* word_bank[20] = {"alligator", "banana", "cookie", "potato", "toast",
-	"jellyfish", "maple", "story", "economics", "textbook", "fiscal", "patterns",
-	"theorem", "income", "relation", "case", "nature", "prime", "bumblebee", "iron"} ;
-
-
-const char* choose_word(void) {
-	ADMUX = 0x40;
-	SET_BIT(ADCSRA, 7);
-	unsigned short samp = sample();
-	unsigned short samp2;
-	for(int i = 0; i < 16; i++) {
-		samp2 = sample();
-		samp = (samp ^ samp2) << 1;
-		
-	}
-	int i = samp % 20;
-	return word_bank[i];
-}
 
 void end(int win) {
 	lcd_clr();
@@ -55,13 +37,14 @@ void end(int win) {
 
 }
 
-void display_word(const char* word, int remaining_guesses) {
+void display_word(const char** word, int remaining_guesses) {
 	int finished_flag = 1;
-	for (int i = 0; word[i] != '\0'; i++) {
+	const char* temp_word = *word;
+	for (int i = 0; temp_word[i] != '\0'; i++) {
 		out_str[i] = '_';
 		for (int j = 0; letter_guesses[j] != '\0'; j++) {
-			if(letter_guesses[j] == word[i]) {
-				out_str[i] = word[i];
+			if(letter_guesses[j] == temp_word[i]) {
+				out_str[i] = temp_word[i];
 			}
 		}
 	}
@@ -90,15 +73,19 @@ void display_word(const char* word, int remaining_guesses) {
 
 }
 
-/*void restart() {
-	word = choose_word();
+void restart(const char** word) {
+	end_game = 0;
+	*word = choose_word();
+	lives = 6;
 	strcpy(inp_str, "");
-	strcpy(out_str, "");
+	//strcpy(out_str, "");
+	memset(out_str, 0, sizeof(out_str));
 	strcpy(letter_guesses, "");
-	guesses = 8;
-}*/
+	strcpy(cur_guess,' ');
+	lcd_clr();
+}
 
-void submit(void) {
+void submit(const char** word) {
 	char temp[2] = {cur_guess, '\0'};
 	int flag = 1;
 	
@@ -110,114 +97,19 @@ void submit(void) {
 	}
 	
 	//check if letter exists in word
-	for (int i = 0; word[i] != '\0';i++) {
-		if(cur_guess == word[i]) {
+	for (int i = 0; *word[i] != '\0';i++) {
+		if(cur_guess == *word[i]) {
 			flag = 0;
 		}
 	}
-	guesses -= flag;
+	lives -= flag;
 	strcat(letter_guesses, temp);
 }
 
 
-void letter_guess(int key) {
-	switch(key) {
-		case 2: //A,B,C
-				if(cur_guess == 'a') {
-					cur_guess = 'b';
-				} 
-				else if (cur_guess == 'b') {
-					cur_guess = 'c';
-				}
-				else {
-					cur_guess = 'a';
-				}
-				break;
-		case 3: //D,E,F
-				if(cur_guess == 'd') {
-					cur_guess = 'e';
-				}
-				else if (cur_guess == 'e') {
-					cur_guess = 'f';
-				}
-				else {
-					cur_guess = 'd';
-				}
-				break;
-		case 5: //G,H,I
-				if(cur_guess == 'g') {
-					cur_guess = 'h';
-				}
-				else if (cur_guess == 'h') {
-					cur_guess = 'i';
-				}
-				else {
-					cur_guess = 'g';
-				}
-				break;
-		case 6: //J,K,L
-				if(cur_guess == 'j') {
-					cur_guess = 'k';
-				}
-				else if (cur_guess == 'k') {
-					cur_guess = 'l';
-				}
-				else {
-					cur_guess = 'j';
-				}
-				break;
-		case 7: //M,N,O
-				if(cur_guess == 'm') {
-					cur_guess = 'n';
-				}
-				else if (cur_guess == 'n') {
-					cur_guess = 'o';
-				}
-				else {
-					cur_guess = 'm';
-				}
-				break;
-		case 9: //P,R,S
-				if(cur_guess == 'p') {
-					cur_guess = 'r';
-				}
-				else if (cur_guess == 'r') {
-					cur_guess = 's';
-				}
-				else {
-					cur_guess = 'p';
-				}
-				break;
-		case 10: //T,U,V
-				if(cur_guess == 't') {
-					cur_guess = 'u';
-				}
-				else if (cur_guess == 'u') {
-					cur_guess = 'v';
-				}
-				else {
-					cur_guess = 't';
-				}
-				break;
-		case 11: //W,X,Y
-				if(cur_guess == 'w') {
-					cur_guess = 'x';
-				}
-				else if (cur_guess == 'x') {
-					cur_guess = 'y';
-				}
-				else {
-					cur_guess = 'w';
-				}
-				break;
-		case 14: //Z
-			cur_guess = 'z';
-			break;
-		default: break;
-	}
-}
 
-void on_key_press(int key) {
+
+void on_key_press(int key, char* cur_guess, const char** word) {
 	switch(key) {
 		case 2: 
 		case 3:	
@@ -227,11 +119,11 @@ void on_key_press(int key) {
 		case 9: 
 		case 10: 
 		case 11: 
-		case 14: letter_guess(key);
+		case 14: letter_change(key, cur_guess);
 				break;
-		case 12: //restart();
+		case 12: restart(word);
 				break;
-		case 16: submit();
+		case 16: submit(word);
 				break;
 		default: break;
 	}
@@ -241,21 +133,22 @@ void on_key_press(int key) {
 
 int main(void)
 {
+	const char* word;
 	lcd_init();
-
 	word = choose_word();
 	while(1) {
-		avr_wait(250);
-		lcd_clr();
 		int key = get_key();
-		display_word(word, guesses);
-		on_key_press(key);
-		if(end_game){
-			break;
+		on_key_press(key, &cur_guess, &word);
+		while(!end_game) {
+			lcd_pos(0,0);
+			sprintf(inp_str, "%c %s",cur_guess, letter_guesses);
+			lcd_puts2(inp_str);
+			avr_wait(250);
+			lcd_clr();
+			int key = get_key();
+			display_word(&word, lives);
+			on_key_press(key, &cur_guess, &word);
 		}
-		lcd_pos(0,0);
-		sprintf(inp_str, "%c %s",cur_guess, letter_guesses);
-		lcd_puts2(inp_str);
 		
 
 	}

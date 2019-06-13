@@ -11,6 +11,6 @@
 
 int is_pressed(int r, int c);
 int get_key(void);
-
+void letter_change(int key, char* letter);
 
 #endif /* KEYPAD_H_ */
